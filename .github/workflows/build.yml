@@ -1,3 +1,4 @@
+```yaml
 name: Build Madeira
 
 on:
@@ -16,13 +17,13 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode.app
+          sudo xcode-select -s /Applications/Xcode_16.4.app
           xcodebuild -version
 
-      - name: Show repository
+      - name: Prepare VC runtime
         run: |
-          ls -la
-          find . -maxdepth 3 -type f | head -100
+          chmod +x tools/fetch-vcruntime.sh
+          ./tools/fetch-vcruntime.sh
 
       - name: Build Madeira
         run: |
@@ -36,12 +37,13 @@ jobs:
 
       - name: Package IPA
         run: |
-          mkdir -p Payload
+          rm -rf Payload Madeira.ipa
+          mkdir Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/Madeira.app Payload/
-          zip -r Madeira-unsigned.ipa Payload
+          zip -r Madeira.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: Madeira-unsigned
-          path: Madeira-unsigned.ipa
+          path: Madeira.ipa
