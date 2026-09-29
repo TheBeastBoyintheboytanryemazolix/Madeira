@@ -22,9 +22,9 @@ jobs:
       - name: Show repository
         run: |
           ls -la
-          find app -maxdepth 3 -type f | head -100
+          find . -maxdepth 3 -type f | head -100
 
-      - name: Build
+      - name: Build Madeira
         run: |
           xcodebuild \
             -project app/Madeira.xcodeproj \
