@@ -4,7 +4,35 @@ on:
   workflow_dispatch:
 
 jobs:
+  vcruntime:
+    runs-on: windows-latest
+    steps:
+      - name: Install VC++ redistributable and collect DLLs
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile vc_redist.x64.exe
+          $p = Start-Process .\vc_redist.x64.exe -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru
+          # 0 = ok, 1638 = same/newer version already installed, 3010 = reboot pending (fine)
+          if ($p.ExitCode -notin 0,1638,3010) { throw "Redist installer failed: $($p.ExitCode)" }
+          $names = 'concrt140','msvcp140','msvcp140_1','msvcp140_2','msvcp140_atomic_wait',
+                   'msvcp140_codecvt_ids','vcamp140','vccorlib140','vcomp140',
+                   'vcruntime140','vcruntime140_1','vcruntime140_threads'
+          New-Item -ItemType Directory -Force x86_64-vcruntime | Out-Null
+          foreach ($n in $names) {
+            $src = Join-Path $env:SystemRoot "System32\$n.dll"
+            if (-not (Test-Path $src)) { throw "Missing $n.dll in System32" }
+            Copy-Item $src x86_64-vcruntime\
+          }
+          Get-ChildItem x86_64-vcruntime | Select-Object Name, Length
+
+      - name: Upload VC runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcruntime
+          path: x86_64-vcruntime
+
   build:
+    needs: vcruntime
     runs-on: macos-15
 
     steps:
@@ -17,14 +45,14 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app
 
-      - name: Prepare VC runtime
+      - name: Download VC runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: vcruntime
+          path: app/Madeira/x86_64-vcruntime
+
+      - name: Verify VC runtime
         run: |
-          brew install sevenzip
-          curl -fsSL -o VC_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
-          7zz x VC_redist.x64.exe -o/tmp/vcredist -y
-          mkdir -p app/Madeira/x86_64-vcruntime
-          7zz x "/tmp/vcredist/.rsrc/1033/CABINET/"*.cab -oapp/Madeira/x86_64-vcruntime -y
-          # Fail early if any of the 12 expected DLLs are missing
           for f in concrt140 msvcp140 msvcp140_1 msvcp140_2 msvcp140_atomic_wait \
                    msvcp140_codecvt_ids vcamp140 vccorlib140 vcomp140 vcruntime140 \
                    vcruntime140_1 vcruntime140_threads; do
