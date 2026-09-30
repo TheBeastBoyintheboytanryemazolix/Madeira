@@ -19,8 +19,17 @@ jobs:
 
       - name: Prepare VC runtime
         run: |
-          chmod +x tools/fetch-vcruntime.sh
-          ./tools/fetch-vcruntime.sh
+          brew install sevenzip
+          curl -fsSL -o VC_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
+          7zz x VC_redist.x64.exe -o/tmp/vcredist -y
+          mkdir -p app/Madeira/x86_64-vcruntime
+          7zz x "/tmp/vcredist/.rsrc/1033/CABINET/"*.cab -oapp/Madeira/x86_64-vcruntime -y
+          # Fail early if any of the 12 expected DLLs are missing
+          for f in concrt140 msvcp140 msvcp140_1 msvcp140_2 msvcp140_atomic_wait \
+                   msvcp140_codecvt_ids vcamp140 vccorlib140 vcomp140 vcruntime140 \
+                   vcruntime140_1 vcruntime140_threads; do
+            test -f "app/Madeira/x86_64-vcruntime/$f.dll" || { echo "Missing $f.dll"; ls -R app/Madeira/x86_64-vcruntime; exit 1; }
+          done
 
       - name: Build Madeira
         run: |
